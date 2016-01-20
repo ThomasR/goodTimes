@@ -28,7 +28,7 @@ or
 * `-precision` (Alias `-p`)
   Rounding precision in percent, where 1 = round to the hour, 2 = round to 30 minutes, etc. Defaults to `4`.
 * `-dateFormat` (Alias `-d`)
-  Date format as defined in [the .NET reference][2]. Defaults to `dd/MM/yyyy`.
+  Date format as defined in [the .NET reference][2]. Defaults to `ddd dd/MM/yyyy`.
 
 
 ## i18n
