@@ -82,7 +82,7 @@ param (
 #    [ValidateScript({$_ -cmatch '\bd\b' -or ($_ -cmatch '\bdd\b' -and $_ -cmatch '\bM{1,4}\b')})]
     [ValidateScript({$_ -cnotmatch '[HhmsfFt]'})]
     [alias('d')]
-        $dateFormat = 'ddd dd/MM/yyyy' # "/" ist Platzhalter f?r lokalisierten Trenner
+        $dateFormat = 'ddd dd/MM/yyyy' # "/" ist Platzhalter für lokalisierten Trenner
 )
 
 # helper functions to calculate the required attributes
@@ -157,39 +157,71 @@ function wait() {
     }
 }
 
-# create a filterHashTable for Get-WinEvent that filters boot and shutdown events from the desired period
-$filter = @{
-    LogName = 'System'
-    ProviderName = 'Microsoft-Windows-Kernel-General'
-    ID = 12, 13
-    StartTime = (get-date).addDays(-$historyLength)
+# helper to determine whether a given EventLogRecord is a shutdown or suspend event
+function isStartEvent($event) {
+    return ($event.ProviderName -eq 'Microsoft-Windows-Kernel-General' -and $event.ID -eq 12) -or
+            ($event.ProviderName -eq 'Microsoft-Windows-Power-Troubleshooter' -and $event.ID -eq 1)
 }
 
-# get system log entries
-[System.Collections.ArrayList]$events = Get-WinEvent -FilterHashtable $filter | select ID, TimeCreated | sort TimeCreated
-
-# add a fake shutdown event for this very moment
-$events += New-Object PSCustomObject -Property @{
-    ID = 13
-    TimeCreated = get-date
+# helper to determine whether a given EventLogRecord is a boot or wakeup event
+function isStopEvent($event) {
+    return ($event.ProviderName -eq 'Microsoft-Windows-Kernel-General' -and $event.ID -eq 13) -or
+            ($event.ProviderName -eq 'Microsoft-Windows-Kernel-Power' -and $event.ID -eq 42)
 }
+
+
+
+
+# create an array of filterHashTables that filter boot and shutdown events from the desired period
+$startTime = (get-date).addDays(-$historyLength)
+$filters = @(
+    @{
+        StartTime = $startTime
+        LogName = 'System'
+        ProviderName = 'Microsoft-Windows-Kernel-General'
+        ID = 12, 13
+    },
+    @{
+        StartTime = $startTime
+        LogName = 'System'
+        ProviderName = 'Microsoft-Windows-Kernel-Power'
+        ID = 42 # what else?
+    },
+    @{
+        StartTime = $startTime
+        LogName = 'System'
+        ProviderName = 'Microsoft-Windows-Power-Troubleshooter'
+        ID = 1
+    }
+)
+
+# get system log entries for boot/shutdown
+$events = Get-WinEvent -FilterHashtable $filters | select ID, TimeCreated, ProviderName
+
+# sort (reverse chronological order) and convert to ArrayList
+[System.Collections.ArrayList]$events = $events | sort TimeCreated
 
 # create an empty list, which will hold one entry per day
 $log = New-Object System.Collections.ArrayList
 
-# fill the $log list by searching for boot/shutdown pairs
+# fill the $log list by searching for start/stop pairs
 :outer while ($events.count -ge 2) {
-    # find the latest shutdown event
-    do {
-        if ($events.count -lt 2) {
-            # if there is only one shutdown event left, there can't be any more boot event (e.g. when system log was cleared)
-            break outer;
-        }
-        $end = $events[$events.count - 1]
-        $events.remove($end)
-    } while ($end.ID -ne 13) # not sure if ther can indeed be consecutive shutdown events, but let's better be safe than sorry
+    if ($log) {
+        # find the latest stop event
+        do {
+            if ($events.count -lt 2) {
+                # if there is only one stop event left, there can't be any more start event (e.g. when system log was cleared)
+                break outer;
+            }
+            $end = $events[$events.count - 1]
+            $events.remove($end)
+        } while (-not (isStopEvent $end)) # consecutive start events. This may happen when the system crashes (power failure, etc.)
+    } else {
+        # add a fake shutdown event for this very moment
+        $end = @{TimeCreated = get-date}
+    }
 
-    # find the corresponding boot event
+    # find the corresponding start event
     do {
         if ($events.count -lt 1) {
             # no more events left
@@ -197,9 +229,9 @@ $log = New-Object System.Collections.ArrayList
         }
         $start = $events[$events.count - 1]
         $events.remove($start)
-    } while ($start.ID -ne 12) # consecutive boot events. This may happen when the system crashes (power failure, etc.)
+    } while (-not (isStartEvent $start)) # not sure if ther can indeed be consecutive stop events, but let's better be safe than sorry
 
-    # check if the current boot/shutdown pair has occured on the same day as the previous one
+    # check if the current start/stop pair has occured on the same day as the previous one
     $last = $log[0]
     if ($last -and $start.TimeCreated.Date.equals($last[0][0].Date)) {
         # combine uptimes
