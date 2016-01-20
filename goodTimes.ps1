@@ -30,15 +30,15 @@
 #    Standardwert: 8
 #    Alias: -h
 # .PARAMETER  lunchBreak
-#    Länge der Mittagspause in Stunden pro Tag.
+#    LÃ¤nge der Mittagspause in Stunden pro Tag.
 #    Standardwert: 1
 #    Alias: -b
 # .PARAMETER  precision
-#    Rundungspräzision in %, d.h. 1 = Rundung auf volle Stunde, 4 = Rundung auf 60/4=15 Minuten, …, 100 = keine Rundung
+#    RundungsprÃ¤zision in %, d.h. 1 = Rundung auf volle Stunde, 4 = Rundung auf 60/4=15 Minuten, â€¦, 100 = keine Rundung
 #    Standardwert: 4
 #    Alias: -p
 # .PARAMETER  dateFormat
-#    Datumsformat gemäß https://msdn.microsoft.com/en-us/library/8kb3ddd4.aspx?cs-lang=vb#content
+#    Datumsformat gemÃ¤ÃŸ https://msdn.microsoft.com/en-us/library/8kb3ddd4.aspx?cs-lang=vb#content
 #    Standardwert: ddd dd/MM/yyyy
 #    Alias: -d
 #
@@ -53,13 +53,13 @@
 # .EXAMPLE
 #    .\goodTimes.ps1 -historyLength 30 -workingHours 8 -lunchBreak 1 -precision 4
 #    (Aufruf mit explizit gesetzten Standardwerten)
-#    (30 Tage anzeigen, Arbeitszeit 8 Stunden täglich, 1 Stunde Mittagspause, Rundung auf 15 (=60/4) Minuten)
+#    (30 Tage anzeigen, Arbeitszeit 8 Stunden tÃ¤glich, 1 Stunde Mittagspause, Rundung auf 15 (=60/4) Minuten)
 # .EXAMPLE
 #    .\goodTimes.ps1 30 -h 8 -b 1 -p 4
 #    (Aufruf mit explizit gesetzten Standardwerten, Kurzschreibweise)
 # .EXAMPLE
 #    .\goodTimes.ps1 14 -h 7 -b .5 -p 6
-#    (14 Tage anzeigen, Arbeitszeit 7 Stunden täglich, 30 Minuten Mittagspause, Rundung auf 10 (=60/6) Minuten)
+#    (14 Tage anzeigen, Arbeitszeit 7 Stunden tÃ¤glich, 30 Minuten Mittagspause, Rundung auf 10 (=60/6) Minuten)
 
 param (
     [int]
@@ -82,9 +82,12 @@ param (
 #    [ValidateScript({$_ -cmatch '\bd\b' -or ($_ -cmatch '\bdd\b' -and $_ -cmatch '\bM{1,4}\b')})]
     [ValidateScript({$_ -cnotmatch '[HhmsfFt]'})]
     [alias('d')]
-        $dateFormat = 'ddd dd/MM/yyyy' # "/" ist Platzhalter für lokalisierten Trenner
+        $dateFormat = 'ddd dd/MM/yyyy' # "/" ist Platzhalter f?r lokalisierten Trenner
 )
 
+# helper functions to calculate the required attributes
+
+# total uptime
 function getUptimeAttr($entry) {
     $result = New-TimeSpan
     foreach ($interval in $entry) {
@@ -93,6 +96,7 @@ function getUptimeAttr($entry) {
     write $result
 }
 
+# uptime intervals
 function getIntervalAttr($entry) {
     $result = @();
     foreach ($interval in $entry) {
@@ -101,14 +105,16 @@ function getIntervalAttr($entry) {
     write ($result -join ', ')
 }
 
+# booking hours
 function getBookingHoursAttr($interval) {
     $netTime = $interval.totalHours - $lunchbreak
     write ([math]::Round($netTime * $precision) / $precision)
 }
 
+# flex time delta
 function getFlexTimeAttr($bookedHours) {
     $delta = $bookedHours - $workinghours
-    $result = $delta.toString('+0.00;-0.00;±0.00')
+    $result = $delta.toString('+0.00;-0.00;?0.00')
     if ($delta -eq 0) {
         write $result, $null
     } elseif ($delta -gt 0) {
@@ -117,7 +123,9 @@ function getFlexTimeAttr($bookedHours) {
         write $result, 'darkred'
     }
 }
+# end helper functions
 
+# generate a hashmap of the abovementioned attributes
 function getLogAttrs($entry) {
     $result = @{}
     $result.uptime = getUptimeAttr $entry
@@ -127,6 +135,7 @@ function getLogAttrs($entry) {
     write $result
 }
 
+# convenience function to write to screen with or without color
 function print($string, $color) {
     if ($color) {
         write-host -f $color -n $string
@@ -135,17 +144,20 @@ function print($string, $color) {
     }
 }
 
+# convenience function to write to screen with or without color
 function println($string, $color) {
     print ($string + "`r`n") $color
 }
 
+# If running in the console, wait for input before continuing.
 function wait() {
-    # If running in the console, wait for input before continuing.
     if ($Host.Name -eq 'ConsoleHost') {
         Write-Host 'Press any key to continue...'
         $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyUp') > $null
     }
 }
+
+# create a filterHashTable for Get-WinEvent that filters boot and shutdown events from the desired period
 $filter = @{
     LogName = 'System'
     ProviderName = 'Microsoft-Windows-Kernel-General'
@@ -153,51 +165,63 @@ $filter = @{
     StartTime = (get-date).addDays(-$historyLength)
 }
 
+# get system log entries
 [System.Collections.ArrayList]$events = Get-WinEvent -FilterHashtable $filter | select ID, TimeCreated | sort TimeCreated
 
+# add a fake shutdown event for this very moment
 $events += New-Object PSCustomObject -Property @{
     ID = 13
     TimeCreated = get-date
 }
 
+# create an empty list, which will hold one entry per day
 $log = New-Object System.Collections.ArrayList
 
-write-host $log
-
+# fill the $log list by searching for boot/shutdown pairs
 :outer while ($events.count -ge 2) {
+    # find the latest shutdown event
     do {
         if ($events.count -lt 2) {
+            # if there is only one shutdown event left, there can't be any more boot event (e.g. when system log was cleared)
             break outer;
         }
         $end = $events[$events.count - 1]
         $events.remove($end)
-    } while ($end.ID -ne 13)
+    } while ($end.ID -ne 13) # not sure if ther can indeed be consecutive shutdown events, but let's better be safe than sorry
+
+    # find the corresponding boot event
     do {
         if ($events.count -lt 1) {
+            # no more events left
             break outer;
         }
         $start = $events[$events.count - 1]
         $events.remove($start)
-    } while ($start.ID -ne 12)
+    } while ($start.ID -ne 12) # consecutive boot events. This may happen when the system crashes (power failure, etc.)
 
+    # check if the current boot/shutdown pair has occured on the same day as the previous one
     $last = $log[0]
     if ($last -and $start.TimeCreated.Date.equals($last[0][0].Date)) {
+        # combine uptimes
         $log[0] = ,@($start.TimeCreated, $end.TimeCreated) + $last
     } else {
+        # create new day
         $log.insert(0, @(,@($start.TimeCreated, $end.TimeCreated)))
     }
 
 }
 
+# colors
 $oldfgColor= $host.UI.RawUI.ForegroundColor
 $host.UI.RawUI.ForegroundColor = 'gray'
 $oldbgColor = $host.UI.RawUI.BackgroundColor
 $host.UI.RawUI.BackgroundColor = 'black'
+
+# write the output
 $screenwidth = $host.UI.RawUI.BufferSize.width
 
 Write-Host ("{0,-$($screenwidth - 1)}" -f '    Datum     Buchen Gleitzeit  Uptime (incl. Pause)')
 Write-Host ("{0,-$($screenwidth - 1)}" -f '------------- ------ ---------  --------------------')
-
 
 foreach ($entry in $log) {
     $firstInterval = $entry[0]
@@ -218,6 +242,8 @@ foreach ($entry in $log) {
     print ("{0,6:#0}:{1:00} | {2,-$($screenwidth - 42)}" -f $attrs.uptime.hours, [math]::round($attrs.uptime.minutes + $attrs.uptime.seconds / 60), $attrs.intervals) DarkGray
     Write-Host
 }
+
+# restore previous colors
 $host.UI.RawUI.BackgroundColor = $oldbgColor
 $host.UI.RawUI.ForegroundColor = $oldfgColor
 
