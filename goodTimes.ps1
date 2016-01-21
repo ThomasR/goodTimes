@@ -93,7 +93,7 @@ function getUptimeAttr($entry) {
     foreach ($interval in $entry) {
         $result = $result.add($interval[1] - $interval[0])
     }
-    write $result
+    $result
 }
 
 # uptime intervals
@@ -102,13 +102,13 @@ function getIntervalAttr($entry) {
     foreach ($interval in $entry) {
         $result += '{0:HH:mm}-{1:HH:mm}' -f $interval[0], $interval[1]
     }
-    write ($result -join ', ')
+    $result -join ', '
 }
 
 # booking hours
 function getBookingHoursAttr($interval) {
     $netTime = $interval.totalHours - $lunchbreak
-    write ([math]::Round($netTime * $precision) / $precision)
+    [math]::Round($netTime * $precision) / $precision
 }
 
 # flex time delta
@@ -271,14 +271,19 @@ foreach ($entry in $log) {
         print $day
     }
     $attrs = getLogAttrs($entry)
-    print (' {0,5}     ' -f $attrs.bookingHours.toString('#0.00', [Globalization.CultureInfo]::getCultureInfo('de-DE'))) cyan
+    print (' {0,5}     ' -f
+        $attrs.bookingHours.toString('#0.00', [Globalization.CultureInfo]::getCultureInfo('de-DE'))
+        ) cyan
     print $attrs.flexTime[0] $attrs.flexTime[1]
-    print ("{0,6:#0}:{1:00} | {2,-$($screenwidth - 42)}" -f $attrs.uptime.hours, [Math]::Round($attrs.uptime.minutes + $attrs.uptime.seconds / 60), $attrs.intervals) darkGray
+    print ("{0,6:#0}:{1:00} | {2,-$($screenwidth - 42)}" -f
+        $attrs.uptime.hours,
+        [Math]::Round($attrs.uptime.minutes + $attrs.uptime.seconds / 60),
+        $attrs.intervals) darkGray
     Write-Host
 }
 
 # restore previous colors
-$host.UI.RawUI.BackgroundColor = $olBbgColor
+$host.UI.RawUI.BackgroundColor = $oldBgColor
 $host.UI.RawUI.ForegroundColor = $oldFgColor
 
 wait
