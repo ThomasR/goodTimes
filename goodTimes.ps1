@@ -157,13 +157,13 @@ function wait() {
     }
 }
 
-# helper to determine whether a given EventLogRecord is a shutdown or suspend event
+# helper to determine whether a given EventLogRecord is a boot or wakeup event
 function isStartEvent($event) {
     return ($event.ProviderName -eq 'Microsoft-Windows-Kernel-General' -and $event.ID -eq 12) -or
             ($event.ProviderName -eq 'Microsoft-Windows-Power-Troubleshooter' -and $event.ID -eq 1)
 }
 
-# helper to determine whether a given EventLogRecord is a boot or wakeup event
+# helper to determine whether a given EventLogRecord is a shutdown or suspend event
 function isStopEvent($event) {
     return ($event.ProviderName -eq 'Microsoft-Windows-Kernel-General' -and $event.ID -eq 13) -or
             ($event.ProviderName -eq 'Microsoft-Windows-Kernel-Power' -and $event.ID -eq 42)
