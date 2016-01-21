@@ -98,7 +98,7 @@ function getUptimeAttr($entry) {
 
 # uptime intervals
 function getIntervalAttr($entry) {
-    $result = @();
+    $result = @()
     foreach ($interval in $entry) {
         $result += '{0:HH:mm}-{1:HH:mm}' -f $interval[0], $interval[1]
     }
@@ -114,7 +114,7 @@ function getBookingHoursAttr($interval) {
 # flex time delta
 function getFlexTimeAttr($bookedHours) {
     $delta = $bookedHours - $workinghours
-    $result = $delta.toString('+0.00;-0.00;?0.00')
+    $result = $delta.toString('+0.00;-0.00;±0.00')
     if ($delta -eq 0) {
         write $result, $null
     } elseif ($delta -gt 0) {
@@ -127,12 +127,13 @@ function getFlexTimeAttr($bookedHours) {
 
 # generate a hashmap of the abovementioned attributes
 function getLogAttrs($entry) {
-    $result = @{}
-    $result.uptime = getUptimeAttr $entry
+    $result = @{
+        uptime = getUptimeAttr $entry
+        intervals = getIntervalAttr $entry
+    }
     $result.bookingHours = getBookingHoursAttr $result.uptime
     $result.flexTime = getFlexTimeAttr $result.bookingHours
-    $result.intervals = getIntervalAttr $entry
-    write $result
+    $result
 }
 
 # convenience function to write to screen with or without color
@@ -174,7 +175,7 @@ function isStopEvent($event) {
 
 # create an array of filterHashTables that filter boot and shutdown events from the desired period
 $startTime = (get-date).addDays(-$historyLength)
-$filters = @(
+$filters = (
     @{
         StartTime = $startTime
         LogName = 'System'
@@ -199,10 +200,10 @@ $filters = @(
 $events = Get-WinEvent -FilterHashtable $filters | select ID, TimeCreated, ProviderName
 
 # sort (reverse chronological order) and convert to ArrayList
-[System.Collections.ArrayList]$events = $events | sort TimeCreated
+[Collections.ArrayList]$events = $events | sort TimeCreated
 
 # create an empty list, which will hold one entry per day
-$log = New-Object System.Collections.ArrayList
+$log = New-Object Collections.ArrayList
 
 # fill the $log list by searching for start/stop pairs
 :outer while ($events.count -ge 2) {
@@ -211,7 +212,7 @@ $log = New-Object System.Collections.ArrayList
         do {
             if ($events.count -lt 2) {
                 # if there is only one stop event left, there can't be any more start event (e.g. when system log was cleared)
-                break outer;
+                break outer
             }
             $end = $events[$events.count - 1]
             $events.remove($end)
@@ -225,7 +226,7 @@ $log = New-Object System.Collections.ArrayList
     do {
         if ($events.count -lt 1) {
             # no more events left
-            break outer;
+            break outer
         }
         $start = $events[$events.count - 1]
         $events.remove($start)
@@ -233,20 +234,21 @@ $log = New-Object System.Collections.ArrayList
 
     # check if the current start/stop pair has occured on the same day as the previous one
     $last = $log[0]
+    $interval = ,($start.TimeCreated, $end.TimeCreated)
     if ($last -and $start.TimeCreated.Date.equals($last[0][0].Date)) {
         # combine uptimes
-        $log[0] = ,@($start.TimeCreated, $end.TimeCreated) + $last
+        $log[0] = $interval + $last
     } else {
         # create new day
-        $log.insert(0, @(,@($start.TimeCreated, $end.TimeCreated)))
+        $log.insert(0, $interval)
     }
 
 }
 
 # colors
-$oldfgColor= $host.UI.RawUI.ForegroundColor
+$oldFgColor= $host.UI.RawUI.ForegroundColor
 $host.UI.RawUI.ForegroundColor = 'gray'
-$oldbgColor = $host.UI.RawUI.BackgroundColor
+$oldBgColor = $host.UI.RawUI.BackgroundColor
 $host.UI.RawUI.BackgroundColor = 'black'
 
 # write the output
@@ -264,19 +266,19 @@ foreach ($entry in $log) {
     }
     $lastDayOfWeek = $dayOfWeek
     if ($dayOfWeek -ge 5) {
-        Write-Host $day -n -backgroundColor darkred -foregroundcolor gray
+        Write-Host $day -n -backgroundColor darkRed -foregroundColor gray
     } else {
         print $day
     }
     $attrs = getLogAttrs($entry)
-    print (' {0,5}     ' -f $attrs.bookingHours.toString('#0.00', [System.Globalization.CultureInfo]::getCultureInfo('de-DE'))) cyan
+    print (' {0,5}     ' -f $attrs.bookingHours.toString('#0.00', [Globalization.CultureInfo]::getCultureInfo('de-DE'))) cyan
     print $attrs.flexTime[0] $attrs.flexTime[1]
-    print ("{0,6:#0}:{1:00} | {2,-$($screenwidth - 42)}" -f $attrs.uptime.hours, [math]::round($attrs.uptime.minutes + $attrs.uptime.seconds / 60), $attrs.intervals) DarkGray
+    print ("{0,6:#0}:{1:00} | {2,-$($screenwidth - 42)}" -f $attrs.uptime.hours, [Math]::Round($attrs.uptime.minutes + $attrs.uptime.seconds / 60), $attrs.intervals) darkGray
     Write-Host
 }
 
 # restore previous colors
-$host.UI.RawUI.BackgroundColor = $oldbgColor
-$host.UI.RawUI.ForegroundColor = $oldfgColor
+$host.UI.RawUI.BackgroundColor = $olBbgColor
+$host.UI.RawUI.ForegroundColor = $oldFgColor
 
 wait
