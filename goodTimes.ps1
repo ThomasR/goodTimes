@@ -252,30 +252,30 @@ $oldBgColor = $host.UI.RawUI.BackgroundColor
 $host.UI.RawUI.BackgroundColor = 'black'
 
 # write the output
-$screenwidth = $host.UI.RawUI.BufferSize.width
+$screenWidth = $host.UI.RawUI.BufferSize.width
 
-Write-Host ("{0,-$($screenwidth - 1)}" -f '    Datum     Buchen Gleitzeit  Uptime (incl. Pause)')
-Write-Host ("{0,-$($screenwidth - 1)}" -f '------------- ------ ---------  --------------------')
+Write-Host ("{0,-$($screenWidth - 1)}" -f '    Datum     Buchen Gleitzeit  Uptime (incl. Pause)')
+Write-Host ("{0,-$($screenWidth - 1)}" -f '------------- ------ ---------  --------------------')
 
 foreach ($entry in $log) {
-    $firstInterval = $entry[0]
-    $day = $firstInterval[0].Date.toString($dateFormat)
-    $dayOfWeek = ([int]$firstInterval[0].dayOfWeek + 6) % 7
+    $firstStart = $entry[0][0]
+    $dayOfWeek = ([int]$firstStart.dayOfWeek + 6) % 7
     if ($dayOfWeek -lt $lastDayOfWeek) {
-        println ("{0,-$($screenwidth - 1)}" -f '-------------')
+        println ("{0,-$($screenWidth - 1)}" -f '-------------')
+    }
+    $dayFormatted = $firstStart.Date.toString($dateFormat)
+    if ($dayOfWeek -ge 5) {
+        Write-Host $dayFormatted -n -backgroundColor darkred -foregroundcolor gray
+    } else {
+        print $dayFormatted
     }
     $lastDayOfWeek = $dayOfWeek
-    if ($dayOfWeek -ge 5) {
-        Write-Host $day -n -backgroundColor darkRed -foregroundColor gray
-    } else {
-        print $day
-    }
     $attrs = getLogAttrs($entry)
     print (' {0,5}     ' -f
         $attrs.bookingHours.toString('#0.00', [Globalization.CultureInfo]::getCultureInfo('de-DE'))
         ) cyan
     print $attrs.flexTime[0] $attrs.flexTime[1]
-    print ("{0,6:#0}:{1:00} | {2,-$($screenwidth - 42)}" -f
+    print ("{0,6:#0}:{1:00} | {2,-$($screenWidth - 42)}" -f
         $attrs.uptime.hours,
         [Math]::Round($attrs.uptime.minutes + $attrs.uptime.seconds / 60),
         $attrs.intervals) darkGray
