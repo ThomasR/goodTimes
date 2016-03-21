@@ -230,9 +230,9 @@ $log = New-Object Collections.ArrayList
         }
         $start = $events[$events.count - 1]
         $events.remove($start)
-    } while (-not (isStartEvent $start)) # not sure if ther can indeed be consecutive stop events, but let's better be safe than sorry
+    } while (-not (isStartEvent $start)) # not sure if there can indeed be consecutive stop events, but let's better be safe than sorry
 
-    # check if the current start/stop pair has occured on the same day as the previous one
+    # check if the current start/stop pair has occurred on the same day as the previous one
     $last = $log[0]
     $interval = ,($start.TimeCreated, $end.TimeCreated)
     if ($last -and $start.TimeCreated.Date.equals($last[0][0].Date)) {
